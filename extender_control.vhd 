@@ -1,0 +1,174 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+Entity extender_control IS Port
+(
+    clk_input   : IN  std_logic;
+    rst_n       : IN  std_logic;
+    toggle_ex   : IN  std_logic; --PB(1)
+    en_ex       : IN  std_logic;
+    up_ex       : OUT std_logic; --left or right
+    en_mov      : OUT std_logic; -- clk_en
+    en_grap     : OUT std_logic
+ );
+END ENTITY;
+
+
+ Architecture SM of extender_control is
+
+
+
+ TYPE STATE_NAMES IS (S0, S1, S2, S3, S4, S5, S6, S7);   -- list all the STATE_NAMES values
+ --s0: idle
+ --s1: extend + 1
+ --s2: extend + 2
+ --s3: extend + 3
+ --s4: idle extended
+ --s5: extend - 3
+ --s6: extend - 2
+ --s7: extend - 1
+
+
+ SIGNAL current_state, next_state   :  STATE_NAMES;         -- signals of type STATE_NAMES
+
+ SIGNAL not_pressed : std_logic;
+
+
+  BEGIN
+
+ --------------------------------------------------------------------------------
+ --State Machine:
+ --------------------------------------------------------------------------------
+
+ -- REGISTER_LOGIC PROCESS:
+
+Register_Section: PROCESS (clk_input, rst_n, next_state, not_pressed)  -- this process synchronizes the activity to a clock
+BEGIN
+    IF (rst_n = '0') THEN
+        current_state <= S0;
+    ELSIF(rising_edge(clk_input)) THEN
+        IF (toggle_ex = '0') THEN
+            not_pressed <= '0';
+        ELSIF (toggle_ex = '1') THEN
+            not_pressed <= '1';
+        END IF;
+        current_state <= next_State;
+    END IF;
+END PROCESS;
+
+
+
+-- TRANSITION LOGIC PROCESS
+
+Transition_Section: PROCESS (toggle_ex, en_ex, current_state, not_pressed)
+
+BEGIN
+     CASE current_state IS
+            WHEN s0 =>
+                IF (toggle_ex = '0' and not_pressed = '1' and en_ex = '1') THEN  --not_pressed means it's released
+                    next_state <= s1;
+                ELSE
+                    next_state <= s0;
+                END IF;
+
+            WHEN s1 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s0;
+                ELSE
+                    next_state <= s2;
+                END IF;
+
+            WHEN s2 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s7;
+                ELSE
+                    next_state <= s3;
+                END IF;
+
+            WHEN s3 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s6;
+                ELSE
+                    next_state <= s4;
+                END IF;
+
+            WHEN s4 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s5;
+                ELSE
+                    next_state <= s4;
+                END IF;
+
+            WHEN s5 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s4;
+                ELSE
+                    next_state <= s6;
+                END IF;
+
+            WHEN s6 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s3;
+                ELSE
+                    next_state <= s7;
+                END IF;
+
+            WHEN s7 =>
+                IF (toggle_ex = '0' and not_pressed = '1') THEN
+                    next_state <= s2;
+                ELSE
+                    next_state <= s0;
+                END IF;
+        END CASE;
+ END PROCESS;
+
+-- DECODER SECTION PROCESS
+
+Decoder_Section: PROCESS (current_state)
+
+BEGIN
+     CASE current_state IS
+            WHEN s0 =>
+                en_mov  <= '1';
+                en_grap <= '0';
+                up_ex   <= '0';
+
+            WHEN s1 =>
+                en_mov  <= '0';
+                en_grap <= '0';
+                up_ex   <= '1';
+
+            WHEN s2 =>
+                en_mov  <= '0';
+                en_grap <= '0';
+                up_ex   <= '1';
+
+            WHEN s3 =>
+                en_mov  <= '0';
+                en_grap <= '0';
+                up_ex   <= '1';
+
+            WHEN s4 =>
+                en_mov  <= '0';
+                en_grap <= '1';
+                up_ex   <= '1';
+
+            WHEN s5 =>
+                en_mov  <= '0';
+                en_grap <= '0';
+                up_ex   <= '0';
+
+            WHEN s6 =>
+                en_mov  <= '0';
+                en_grap <= '0';
+                up_ex   <= '0';
+
+            WHEN s7 =>
+                en_mov  <= '0';
+                en_grap <= '0';
+                up_ex   <= '0';
+      END CASE;
+ END PROCESS;
+
+ END ARCHITECTURE SM;

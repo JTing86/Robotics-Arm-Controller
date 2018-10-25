@@ -1,0 +1,126 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+Entity position_control IS Port
+(
+    clk_input   : IN  std_logic;
+    rst_n       : IN  std_logic;
+    x_en        : IN  std_logic;
+    y_en          : IN  std_logic;
+    comp_x      : IN  std_logic_vector(2 downto 0);
+    comp_y      : IN  std_logic_vector(2 downto 0);
+    en_mov      : IN  std_logic; --not extender_out
+
+    move_x      : OUT std_logic;
+    move_y      : OUT std_logic;
+    up_x        : OUT std_logic;
+    up_y          : OUT std_logic;
+    en_ex       : OUT std_logic;--extender_enable
+
+    state_error : OUT std_logic
+
+ );
+END ENTITY;
+
+
+ Architecture SM of position_control is
+
+
+
+ TYPE STATE_NAMES IS (S0, S1, S2);   -- list all the STATE_NAMES values
+ --s0 : idle
+ --s1 : moving state
+ --s2 : error
+
+
+ SIGNAL current_state, next_state   :  STATE_NAMES;         -- signals of type STATE_NAMES
+
+
+  BEGIN
+
+ --------------------------------------------------------------------------------
+ --State Machine:
+ --------------------------------------------------------------------------------
+
+ -- REGISTER_LOGIC PROCESS:
+
+Register_Section: PROCESS (clk_input, rst_n, next_state)  -- this process synchronizes the activity to a clock
+BEGIN
+    IF (rst_n = '0') THEN
+        current_state <= S0;
+    ELSIF(rising_edge(clk_input)) THEN
+        current_state <= next_State;
+    END IF;
+END PROCESS;
+
+
+
+-- TRANSITION LOGIC PROCESS
+
+Transition_Section: PROCESS (en_mov, x_en, y_en, comp_x,comp_y, current_state)
+
+BEGIN
+     CASE current_state IS
+         WHEN S0 =>
+                -- move to state 1 if any of the comparisons are greater or lower
+                IF(comp_x(0) = '1' OR comp_y(0) = '1' OR comp_x(2) = '1' OR comp_y(2) = '1') THEN
+                    next_state <= S1;
+                -- move to
+                ELSIF(en_mov = '0' AND (x_en = '0' OR y_en = '0')) THEN
+                    next_state <= S2;
+                ELSE
+                    next_state <= s0;
+                END IF;
+
+         WHEN S1 =>
+
+                IF(comp_x(0) = '1' OR comp_y(0) = '1' OR comp_x(2) = '1' OR comp_y(2) = '1') THEN
+                    next_state <= S1;
+                ELSE
+                    next_state <= s0;
+
+                END IF;
+
+         WHEN S2 =>
+                IF(en_mov = '1') THEN
+                    next_state <= S0;
+                ELSE
+                    next_state <= S2;
+                END IF;
+        END CASE;
+ END PROCESS;
+
+-- DECODER SECTION PROCESS
+
+Decoder_Section: PROCESS (x_en, y_en, comp_x,comp_y, current_state)
+
+BEGIN
+     CASE current_state IS
+         WHEN S0 =>
+                 state_error        <= NOT en_mov AND (NOT x_en OR NOT y_en);
+                 en_ex              <= comp_x(1) AND  comp_y(1); -- in on only if currentpos = target pos
+                 move_x                 <= NOT comp_x(1);
+                 move_y                 <= NOT comp_y(1);
+                 up_x               <= comp_x(0);
+                 up_y                   <= comp_y(0);
+
+         WHEN S1 =>
+                 state_error        <= NOT en_mov AND (NOT x_en OR NOT y_en);
+                 en_ex              <= comp_x(1) AND  comp_y(1);
+                 move_x                 <= NOT x_en AND NOT comp_x(1);
+                 move_y                 <= NOT y_en AND NOT comp_y(1);
+                 up_x                   <= comp_x(0); -- '1' is goes up '0' if goes down X_comp(2) means current lower than target
+                 up_y                   <= comp_y(0);
+
+         WHEN S2 =>
+                 state_error        <= NOT en_mov;
+                 en_ex              <= NOT en_mov;
+                 move_x                 <= en_mov;
+                 move_y                 <= en_mov;
+                 up_x                   <= comp_x(0); -- '1' is goes up '0' if goes down X_comp(2) means current lower than target
+                 up_y                   <= comp_y(0);
+      END CASE;
+ END PROCESS;
+
+ END ARCHITECTURE SM;
